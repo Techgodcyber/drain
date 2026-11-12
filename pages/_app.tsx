@@ -7,11 +7,19 @@ import '../styles/globals.css';
 
 // Imports
 import { WagmiProvider } from 'wagmi';
+import { createConfig } from 'wagmi';
 import {
-  getDefaultConfig,
   RainbowKitProvider,
   darkTheme,
+  connectorsForWallets,
 } from '@rainbow-me/rainbowkit';
+import {
+  rainbowWallet,
+  metaMaskWallet,
+  coinbaseWallet,
+  walletConnectWallet,
+  trustWallet,
+} from '@rainbow-me/rainbowkit/wallets';
 import '@rainbow-me/rainbowkit/styles.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -34,35 +42,54 @@ const walletConnectProjectId = z
   .string()
   .parse(process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID);
 
-const wagmiConfig = getDefaultConfig({
-  appName: 'Drain',
-  projectId: walletConnectProjectId,
-  chains: [
-    mainnet,
-    polygon,
-    optimism,
-    arbitrum,
-    base,
-    avalanche,
-    linea,
-    bsc,
-    gnosis,
+const chains = [
+  mainnet,
+  polygon,
+  optimism,
+  arbitrum,
+  base,
+  avalanche,
+  linea,
+  bsc,
+  gnosis,
+] as const;
+
+const transports = {
+  [mainnet.id]: fallback([
+    http('https://eth.drpc.org'),
+    http('https://cloudflare-eth.com'),
+    http('https://eth.llamarpc.com'),
+  ]),
+  [polygon.id]: http('https://polygon.drpc.org'),
+  [optimism.id]: http('https://optimism.drpc.org'),
+  [arbitrum.id]: http('https://arbitrum.drpc.org'),
+  [base.id]: http('https://base.drpc.org'),
+  [avalanche.id]: http('https://avalanche.drpc.org'),
+  [linea.id]: http('https://linea.drpc.org'),
+  [bsc.id]: http('https://bsc.drpc.org'),
+  [gnosis.id]: http('https://gnosis.drpc.org'),
+};
+
+const connectors = connectorsForWallets(
+  [
+    {
+      groupName: 'Popular',
+      wallets: [
+        metaMaskWallet,
+        trustWallet,
+        rainbowWallet,
+        coinbaseWallet,
+        walletConnectWallet,
+      ],
+    },
   ],
-  transports: {
-    [mainnet.id]: fallback([
-      http('https://eth.drpc.org'),
-      http('https://cloudflare-eth.com'),
-      http('https://eth.llamarpc.com'),
-    ]),
-    [polygon.id]: http('https://polygon.drpc.org'),
-    [optimism.id]: http('https://optimism.drpc.org'),
-    [arbitrum.id]: http('https://arbitrum.drpc.org'),
-    [base.id]: http('https://base.drpc.org'),
-    [avalanche.id]: http('https://avalanche.drpc.org'),
-    [linea.id]: http('https://linea.drpc.org'),
-    [bsc.id]: http('https://bsc.drpc.org'),
-    [gnosis.id]: http('https://gnosis.drpc.org'),
-  },
+  { appName: 'Drain', projectId: walletConnectProjectId },
+);
+
+const wagmiConfig = createConfig({
+  chains: chains as any,
+  transports: transports as any,
+  connectors,
 });
 
 const queryClient = new QueryClient();

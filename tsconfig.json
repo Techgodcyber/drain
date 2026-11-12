@@ -16,9 +16,15 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["*"],
+      "drain-runtime-env": ["src/runtime-env.ts"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".cloudflare/types/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }

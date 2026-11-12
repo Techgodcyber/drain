@@ -63,3 +63,7 @@ yarn-error.log\*
 # vercel
 
 .vercel
+/dist/
+.vinext/
+.cloudflare/
+.dev.vars*

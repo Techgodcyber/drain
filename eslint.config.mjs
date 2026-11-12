@@ -3,7 +3,7 @@ import next from 'eslint-config-next';
 
 export default defineConfig([
   {
-    ignores: ['.next/', 'node_modules/', 'public/', 'out/'],
+    ignores: ['.next/', '.cloudflare/', 'node_modules/', 'public/', 'out/'],
   },
   ...next,
 ]);

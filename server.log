@@ -1,0 +1,76 @@
+
+> @create-web3/frontend@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.5 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.20.10.2:3000
+- Environments: .env.local
+✓ Ready in 709ms
+✓ Running next.config.js took 21ms
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+
+✓ Generated AGENTS.md and CLAUDE.md for AI agents. Set `agentRules: false` in next.config to disable.
+○ Compiling / ...
+ GET / 200 in 18.9s (next.js: 18.7s, application-code: 143ms)
+ HEAD / 304 in 76ms (next.js: 61ms, application-code: 16ms)
+[browser] Lit is in dev mode. Not recommended for production! See https://lit.dev/msg/dev-mode for more information.
+✓ Compiled in 483ms
+ HEAD / 304 in 112ms (next.js: 89ms, application-code: 23ms)
+✓ Compiled in 1729ms
+[browser] "TypeError: Cannot read properties of undefined (reading 'ssr')\n" +
+  '    at Set.forEach (<anonymous>)'
+
+The above error occurred in the <Hydrate> component.
+
+React will try to recreate this component tree from scratch using the error boundary you provided, PagesDevOverlayErrorBoundary.
+ (<anonymous>)
+✓ Compiled in 353ms
+[browser] WalletConnect Core is already initialized. This is probably a mistake and can lead to unexpected behavior. Init() was called 2 times.
+[browser] WalletConnect Core is already initialized. This is probably a mistake and can lead to unexpected behavior. Init() was called 2 times.
+ HEAD / 200 in 228ms (next.js: 216ms, application-code: 12ms)
+ GET / 200 in 69ms (next.js: 54ms, application-code: 15ms)
+ HEAD / 304 in 29ms (next.js: 18ms, application-code: 11ms)
+[browser] Lit is in dev mode. Not recommended for production! See https://lit.dev/msg/dev-mode for more information.
+[browser] { context: [32m'core/relayer/publisher'[39m, level: [33m50[39m, time: [33m1794492325667[39m } 
+[browser] { context: [32m'client'[39m } Failed to publish payload, please try again. id:1794492265652120320 tag:1100 
+[browser] Error: Failed to publish payload, please try again. id:1794492265652120320 tag:1100
+    at <unknown> (Error: Failed to publish payload, please try again. id:1794492265652120320 tag:1100)
+[browser] {
+  context: [32m'core/relayer/subscription'[39m,
+  level: [33m50[39m,
+  msg: [32m'Restore will override. subscription'[39m,
+  time: [33m1794492330534[39m
+} 
+[browser] {
+  context: [32m'core/relayer/subscription'[39m,
+  level: [33m50[39m,
+  msg: [32m'subscription: [{"topic":"c8c74820a9bb40ff9dc8ed895f51244c9939961044da675787d06ad105455468","relay":{"protocol":"irn"},"id":"a4ba45ca6481f9ae2f1f40212d8d7e8ce3ec654eb02ef62643d3a04a66a5faa6"}]'[39m,
+  time: [33m1794492330535[39m
+} 
+[browser] {
+  context: [32m'core/relayer/subscription'[39m,
+  level: [33m50[39m,
+  time: [33m1794492330535[39m
+} 
+[browser] MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 disconnect listeners added. Use emitter.setMaxListeners() to increase limit
+    at new Promise (<anonymous>) (<anonymous>)
+ GET / 304 in 34ms (next.js: 22ms, application-code: 13ms)
+[browser] Lit is in dev mode. Not recommended for production! See https://lit.dev/msg/dev-mode for more information.
+ HEAD / 304 in 23ms (next.js: 12ms, application-code: 12ms)
+[browser] { context: [32m'core/relayer/publisher'[39m, level: [33m50[39m, time: [33m1794492390815[39m } 
+[browser] { context: [32m'client'[39m } Failed to publish payload, please try again. id:1794492330801719040 tag:1100 
+[browser] Error: Failed to publish payload, please try again. id:1794492330801719040 tag:1100
+    at <unknown> (Error: Failed to publish payload, please try again. id:1794492330801719040 tag:1100)
+[browser] ⨯ unhandledRejection: Error: WebSocket connection failed for host: wss://relay.walletconnect.org
+ GET / 304 in 37ms (next.js: 24ms, application-code: 13ms)
+[browser] Lit is in dev mode. Not recommended for production! See https://lit.dev/msg/dev-mode for more information.
+ HEAD / 304 in 33ms (next.js: 17ms, application-code: 16ms)
+✓ Compiled in 85ms
+ HEAD / 200 in 112ms (next.js: 99ms, application-code: 13ms)
+ HEAD / 304 in 22ms (next.js: 12ms, application-code: 10ms)
+✓ Finished filesystem cache database compaction in 10.4s

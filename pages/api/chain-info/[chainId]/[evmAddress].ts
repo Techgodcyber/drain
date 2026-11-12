@@ -1,17 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
-import { MoralisClient } from '../../../../src/moralis-client';
+import { AlchemyClient } from '../../../../src/alchemy-client';
 import { blacklistAddresses } from '../../../../src/token-lists';
+import { getAlchemyApiKey } from 'drain-runtime-env';
 
-// Validate environment variable
-const MORALIS_API_KEY = z.string().parse(process.env.MORALIS_API_KEY);
-
-// Initialize Moralis client (can be reused across requests)
-const moralisClient = new MoralisClient(MORALIS_API_KEY);
-
-// Fetch tokens using Moralis client
+// Fetch tokens using Alchemy client (create new instance per chain for proper initialization)
 const fetchTokens = async (chainId: number, evmAddress: string) => {
-  return moralisClient.fetchTokens(chainId, evmAddress, blacklistAddresses);
+  const apiKey = z.string().parse(getAlchemyApiKey());
+  const alchemyClient = new AlchemyClient(apiKey, chainId);
+  return alchemyClient.fetchTokens(chainId, evmAddress, blacklistAddresses);
 };
 
 const positiveIntFromString = (value: string): number => {
@@ -38,7 +35,7 @@ export default async function handler(
     const { chainId, evmAddress } = requestQuerySchema.parse(req.query);
 
     // Validate that the chain is supported
-    const supportedChains = MoralisClient.getSupportedChainIds();
+    const supportedChains = AlchemyClient.getSupportedChainIds();
     if (!supportedChains.includes(chainId)) {
       return res.status(400).json({
         success: false,

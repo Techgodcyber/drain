@@ -154,7 +154,7 @@ export const GetTokens = () => {
         chain?.id as number,
         address as string,
       );
-      setTokens((newTokens as any).data.erc20s);
+      setTokens(newTokens.data.erc20s);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setError(`Chain ${chain?.id}: ${message}`);

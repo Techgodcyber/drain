@@ -1,5 +1,8 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
+
+const projectDirectory = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   test: {
@@ -11,7 +14,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(projectDirectory, './src'),
     },
   },
 });

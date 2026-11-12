@@ -1,12 +1,14 @@
 import { config } from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'node:url';
 
 // Try to load environment variables from multiple sources
 const envFiles = ['.env.local', '.env'];
+const projectDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 for (const envFile of envFiles) {
-  const envPath = path.resolve(__dirname, envFile);
+  const envPath = path.resolve(projectDirectory, envFile);
   if (fs.existsSync(envPath)) {
     console.log(`Loading environment from ${envFile}`);
     config({ path: envPath });

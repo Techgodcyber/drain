@@ -90,14 +90,37 @@ Required environment variables:
 
 ```bash
 NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=
-MORALIS_API_KEY=
+ALCHEMY_API_KEY=
 ```
 
 - Get a WalletConnect project ID from https://cloud.walletconnect.com/.
-- Get a Moralis API key from https://admin.moralis.io/.
-- Keep `MORALIS_API_KEY` server-side: use `.env.local` for local development
-  and the Vercel project environment for Preview and Production. Never prefix
-  it with `NEXT_PUBLIC_` or commit the real value.
+- Get an Alchemy API key from https://dashboard.alchemy.com/.
+- Keep `ALCHEMY_API_KEY` server-side: use `.env.local` for Next.js local
+  development and a Cloudflare Worker secret for deployment. Never prefix it
+  with `NEXT_PUBLIC_` or commit the real value.
+
+## Deploy to Cloudflare Workers
+
+This Next.js app uses API routes, so upload it as a Worker rather than as a
+static Pages bundle. Cloudflare's vinext integration provides the build and
+deployment path. Use a Node.js release supported by the installed `cf` CLI
+(currently Node 22.23+, 24.22+, or 26.12+):
+
+```bash
+npm install
+npm run build:vinext
+npm run start:vinext
+npm run deploy:vinext
+```
+
+Set `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` in the build environment. Set
+`ALCHEMY_API_KEY` as a Worker secret in Cloudflare; do not add it to
+`cloudflare.config.ts` or commit it. The local Worker preview reads secrets
+from an ignored `.dev.vars` file:
+
+```dotenv
+ALCHEMY_API_KEY=your-alchemy-api-key
+```
 
 ## Verify the project
 
@@ -120,7 +143,7 @@ checks locally.
 - [RainbowKit](https://www.rainbowkit.com/)
 - [Wagmi](https://wagmi.sh/)
 - [Viem](https://viem.sh/)
-- [Moralis](https://moralis.io/)
+- [Alchemy](https://www.alchemy.com/)
 - [Jotai](https://jotai.org/)
 
 ## Architecture
