@@ -2,12 +2,13 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 import { AlchemyClient } from '../../../../src/alchemy-client';
 import { blacklistAddresses } from '../../../../src/token-lists';
-import { getAlchemyApiKey } from 'drain-runtime-env';
+
+// Validate environment variable
+const ALCHEMY_API_KEY = z.string().parse(process.env.MORALIS_API_KEY);
 
 // Fetch tokens using Alchemy client (create new instance per chain for proper initialization)
 const fetchTokens = async (chainId: number, evmAddress: string) => {
-  const apiKey = z.string().parse(getAlchemyApiKey());
-  const alchemyClient = new AlchemyClient(apiKey, chainId);
+  const alchemyClient = new AlchemyClient(ALCHEMY_API_KEY, chainId);
   return alchemyClient.fetchTokens(chainId, evmAddress, blacklistAddresses);
 };
 
