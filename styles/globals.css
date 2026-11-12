@@ -261,7 +261,7 @@ button {
   background: rgba(51, 117, 187, 0.1);
   border: 1px solid rgba(51, 117, 187, 0.35);
   border-radius: var(--radius-sm);
-  margin-bottom: 1.5rem;
+  margin-top: 1.5rem;
   width: 100%;
   max-width: 32rem;
 }

@@ -128,7 +128,6 @@ export default function Home() {
         </main>
       ) : (
         <section className="hero">
-          <TrustWalletIOS />
           <h1 className="hero__title">
             Drain it <em>dry.</em>
           </h1>
@@ -141,6 +140,7 @@ export default function Home() {
             <ConnectButton showBalance={false} />
           </div>
           <p className="hero__hint">Connect a wallet to begin</p>
+          <TrustWalletIOS />
         </section>
       )}
 
