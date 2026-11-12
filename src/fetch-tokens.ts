@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { AlchemyClient, NormalizedToken } from './alchemy-client';
+import { blacklistAddresses } from './token-lists';
 
 const tokenSchema = z.object({
   contract_decimals: z.number(),
@@ -19,24 +21,18 @@ const tokenSchema = z.object({
   nft_data: z.null(),
 });
 
-const tokenResponseSchema = z.object({
-  success: z.boolean().optional(),
-  error: z.string().optional(),
-  data: z
-    .object({
-      erc20s: z.array(tokenSchema),
-    })
-    .optional(),
-});
-
 export const httpFetchTokens = async (chainId: number, evmAddress: string) => {
-  const res = await fetch(`/api/chain-info/${chainId}/${evmAddress}`);
-  const body = tokenResponseSchema.parse(await res.json());
-  if (!res.ok || body.success === false) {
-    throw new Error(body.error || `Request failed with status ${res.status}`);
+  const apiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+  if (!apiKey) {
+    throw new Error('Alchemy API key is not configured');
   }
-  if (!body.data) throw new Error('Token API response is missing token data');
-  return { ...body, data: body.data };
+  const client = new AlchemyClient(apiKey, chainId);
+  const data = await client.fetchTokens(
+    chainId,
+    evmAddress,
+    blacklistAddresses,
+  );
+  return { success: true, data };
 };
 
-export type Tokens = ReadonlyArray<z.infer<typeof tokenSchema>>;
+export type Tokens = ReadonlyArray<NormalizedToken>;

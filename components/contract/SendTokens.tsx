@@ -3,7 +3,24 @@ import { useSendCalls, usePublicClient, useWalletClient } from 'wagmi';
 
 import { isAddress } from 'essential-eth';
 import { useAtom } from 'jotai';
-import { encodeFunctionData, erc20Abi } from 'viem';
+import {
+  createPublicClient,
+  encodeFunctionData,
+  erc20Abi,
+  fallback,
+  http,
+} from 'viem';
+import { mainnet } from 'viem/chains';
+import { normalize } from 'viem/ens';
+
+const ensClient = createPublicClient({
+  chain: mainnet,
+  transport: fallback([
+    http('https://eth.drpc.org'),
+    http('https://cloudflare-eth.com'),
+    http('https://eth.llamarpc.com'),
+  ]),
+});
 import { checkedTokensAtom } from '../../src/atoms/checked-tokens-atom';
 import { destinationAddressAtom } from '../../src/atoms/destination-address-atom';
 import { globalTokensAtom } from '../../src/atoms/global-tokens-atom';
@@ -55,13 +72,9 @@ export const SendTokens = () => {
   const resolveDestinationAddress = async (): Promise<`0x${string}` | null> => {
     if (!destinationAddress) return null;
     if (destinationAddress.includes('.')) {
-      const response = await fetch(
-        `/api/ens/${encodeURIComponent(destinationAddress)}`,
-      );
-      const { address } = (await response.json()) as {
-        success: boolean;
-        address: `0x${string}` | null;
-      };
+      const address = await ensClient.getEnsAddress({
+        name: normalize(destinationAddress),
+      });
       if (!address) {
         showToast(`Could not resolve ${destinationAddress}`, 'warning');
         return null;
