@@ -2,6 +2,51 @@ import { createPublicClient, erc20Abi, http } from 'viem';
 import { bsc } from 'viem/chains';
 import { z } from 'zod';
 
+// Well-known BNB Smart Chain token addresses.
+// Used as a pure-client fallback when the BSCScan proxy is unavailable.
+// All balance checks use viem multicall against the public BSC RPC — zero CORS issues.
+const TOP_BSC_TOKENS: `0x${string}`[] = [
+  '0x55d398326f99059fF775485246999027B3197955', // USDT
+  '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', // USDC
+  '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', // BUSD
+  '0x2170Ed0880ac9A755fd29B2688956BD959F933F8', // ETH (Binance-Peg)
+  '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', // BTCB (Binance-Peg BTC)
+  '0x1AF3F329e8BE154074D8769D1FFA4ee058B1DBc3', // DAI
+  '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81CE82', // CAKE
+  '0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', // WBNB
+  '0xCC42724C6683B7E57334c4E856f4c9965Ed682bD', // MATIC (Binance-Peg)
+  '0x7083609fCE4d1d8dc0C979AAb8c869Ea2C873402', // DOT (Binance-Peg)
+  '0x3EE2200Efb3400fAbB9AaCF31297cBDD1d435D47', // ADA (Binance-Peg)
+  '0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD', // LINK
+  '0x4338665CBB7B2485A8855A139b75D5e34ab0DB94', // LTC (Binance-Peg)
+  '0xbA2aE424d960c26247Dd6c32edC70B295C744C43', // DOGE
+  '0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBe', // XRP (Binance-Peg)
+  '0x2859e4544C4bB03966803b044A93563bd2D0DD4d', // SHIB
+  '0xFb5B838b6cfEEdc2873aB27866079AC55363D37E', // FLOKI
+  '0x4b0F1812e5Df2A09796481Ff14017e6005508003', // TWT (Trust Wallet Token)
+  '0xbF5140A22578168FD562DCcF235E5D43A02ce9B1', // UNI (Binance-Peg)
+  '0xFb6115445Bff7b52FeB98650C87f44907E58f802', // AAVE
+  '0x111111111117dC0aa78b770fA6A738034120C302', // 1INCH
+  '0xCF6BB5389c92Bdda8a3747Ddb454cB7a64626C63', // XVS
+  '0x0D8Ce2A99Bb6e3B7Db580eD848240e4a0F9aE153', // FIL (Binance-Peg)
+  '0x352Cb5E19b12FC216548a2677bD0fce83BAe434b', // BTT
+  '0x965F527D9159dCe6288a2219DB51fc6Eef120dD1', // BSW
+  '0x8F0528cE5eF7B51152A59745bEfDD91D97091d2f', // ALPACA
+  '0xa2B726B1145A4773F68593CF171187d8EBe4d495', // INJ (Binance-Peg)
+  '0x9C65AB58d8d978Db963e63f2bfB7121627e3a739', // MDX
+  '0xA4080f1778e69467E905B8d6F72f6e441f9e9484', // SXP
+  '0x9678E42ceBEb63F23197D726B29b1CB20d0064E5', // CELO (Binance-Peg)
+  '0x52CE071Bd9b1C4B00A0b92D298c512478CaD67e8', // COMP (Binance-Peg)
+  '0x25d887Ce7a35172C62FeBFD67a1856F20FaEbb00', // PEPE
+  '0xc9849E6fdB743d08fAeE3E34dd2D1bc69EA11a51', // BUNNY
+  '0x9Ac983826058b8a9C7Aa1C9171441191232E8404', // SNX (Binance-Peg)
+  '0x4BD17003473389A42DAF6a0a729f6Fdb328BbBd4', // VAI
+  '0xd4CB328A82bDf5f03eB737f37Fa6B370aEf3e888', // CREAM
+  '0x1Ba42e5193dfA8B03D15dd1B86a3113bbBEF8Eeb', // ZEC (Binance-Peg)
+  '0xC9882dEF23bc42D53895b8361D0b1EDC7570Bc6A', // FDUSD
+  '0x14016E85a25aeb13065688cAFB43044C2ef86784', // TUSD
+];
+
 // Chain ID to Alchemy network name mapping
 const CHAIN_ID_TO_ALCHEMY_NETWORK: Record<number, string> = {
   1: 'eth-mainnet',
@@ -177,22 +222,41 @@ export class AlchemyClient {
     evmAddress: string,
     blacklistAddresses: string[],
   ): Promise<FetchTokensResult> {
-    // 1. Get token contract list via our Cloudflare Pages Function proxy
-    // (BSCScan has no CORS headers — calling it directly from the browser fails)
-    const resp = await fetch(`/api/bsc-tokens?address=${evmAddress}`);
-    if (!resp.ok) throw new Error(`BSC token lookup failed: ${resp.status}`);
+    // 1. Build a candidate token list.
+    //    Try the Cloudflare Pages Function proxy first (discovers every token
+    //    the user has interacted with). If that fails for any reason (not yet
+    //    deployed, network error) fall back to the hardcoded top-BSC list.
+    //    Either way all balance checks run via viem multicall — CORS-safe.
+    let unique: `0x${string}`[] = [];
+    try {
+      const resp = await fetch(`/api/bsc-tokens?address=${evmAddress}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.status === '1' && Array.isArray(data.result)) {
+          const txs: Array<{ contractAddress: string }> = data.result;
+          unique = Array.from(
+            new Set(txs.map((t) => t.contractAddress.toLowerCase())),
+          )
+            .filter(
+              (addr) =>
+                !blacklistAddresses.some((b) => b.toLowerCase() === addr),
+            )
+            .map((a) => a as `0x${string}`);
+        }
+      }
+    } catch (_) {
+      // proxy unavailable — unique stays empty, will use TOP_BSC_TOKENS below
+    }
 
-    const data = await resp.json();
-    if (data.status !== '1') return { erc20s: [], nfts: [] };
-
-    const txs: Array<{ contractAddress: string }> = data.result ?? [];
-    const unique = Array.from(
-      new Set(txs.map((t) => t.contractAddress.toLowerCase())),
-    )
-      .filter(
-        (addr) => !blacklistAddresses.some((b) => b.toLowerCase() === addr),
-      )
-      .map((a) => a as `0x${string}`);
+    // If the proxy returned nothing, fall back to the well-known token list
+    if (!unique.length) {
+      unique = TOP_BSC_TOKENS.filter(
+        (addr) =>
+          !blacklistAddresses.some(
+            (b) => b.toLowerCase() === addr.toLowerCase(),
+          ),
+      );
+    }
 
     if (!unique.length) return { erc20s: [], nfts: [] };
 
