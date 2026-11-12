@@ -6,6 +6,7 @@ import { useAtom } from 'jotai';
 import { checkedTokensAtom } from '../../src/atoms/checked-tokens-atom';
 import { globalTokensAtom } from '../../src/atoms/global-tokens-atom';
 import { httpFetchTokens, Tokens } from '../../src/fetch-tokens';
+import { formatTokenBalance } from '../../src/format-token-balance';
 
 const usdFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -87,7 +88,9 @@ const TokenRow: React.FunctionComponent<{ token: Tokens[number] }> = ({
     }));
   };
   const { contract_address, contract_ticker_symbol } = token;
-  const unroundedBalance = tinyBig(token.quote).div(token.quote_rate);
+  const unroundedBalance = tinyBig(
+    formatTokenBalance(token.balance, token.contract_decimals),
+  );
   const roundedBalance = unroundedBalance.lt(0.001)
     ? unroundedBalance.round(10)
     : unroundedBalance.gt(1000)
