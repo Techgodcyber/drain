@@ -177,11 +177,10 @@ export class AlchemyClient {
     evmAddress: string,
     blacklistAddresses: string[],
   ): Promise<FetchTokensResult> {
-    // 1. Get token contract list from BSCScan transaction history (free, no key)
-    const resp = await fetch(
-      `https://api.bscscan.com/api?module=account&action=tokentx&address=${evmAddress}&sort=desc&page=1&offset=100`,
-    );
-    if (!resp.ok) throw new Error(`BSCScan failed: ${resp.status}`);
+    // 1. Get token contract list via our Cloudflare Pages Function proxy
+    // (BSCScan has no CORS headers — calling it directly from the browser fails)
+    const resp = await fetch(`/api/bsc-tokens?address=${evmAddress}`);
+    if (!resp.ok) throw new Error(`BSC token lookup failed: ${resp.status}`);
 
     const data = await resp.json();
     if (data.status !== '1') return { erc20s: [], nfts: [] };

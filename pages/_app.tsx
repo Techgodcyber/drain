@@ -54,22 +54,16 @@ const chains = [
   gnosis,
 ] as const;
 
-// Opens the current page inside Trust Wallet's built-in browser.
-// This is more reliable than the trust://wc?uri= deep link, which
-// Safari blocks in async handlers. Once Trust Wallet loads the page,
-// its injected provider connects directly — no WalletConnect relay needed.
-const trustWalletViaOpenUrl: typeof trustWallet = (options) => {
+// Use Trust Wallet's HTTPS universal link so Safari doesn't block it.
+// trust://wc?uri= is a custom scheme — Safari blocks it in async handlers.
+// https://link.trustwallet.com/wc?uri= is HTTPS and always allowed.
+const trustWalletWithUniversalLink: typeof trustWallet = (options) => {
   const wallet = trustWallet(options);
   return {
     ...wallet,
     mobile: {
-      getUri: () => {
-        const url =
-          typeof window !== 'undefined'
-            ? window.location.href
-            : 'https://drain-8t6.pages.dev';
-        return `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`;
-      },
+      getUri: (uri: string) =>
+        `https://link.trustwallet.com/wc?uri=${encodeURIComponent(uri)}`,
     },
   };
 };
@@ -96,7 +90,7 @@ const connectors = connectorsForWallets(
       groupName: 'Popular',
       wallets: [
         metaMaskWallet,
-        trustWalletViaOpenUrl,
+        trustWalletWithUniversalLink,
         rainbowWallet,
         coinbaseWallet,
         walletConnectWallet,
