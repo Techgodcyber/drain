@@ -54,20 +54,6 @@ const chains = [
   gnosis,
 ] as const;
 
-const trustWalletWithDeepLink: typeof trustWallet = (options) => {
-  const wallet = trustWallet(options);
-  return {
-    ...wallet,
-    mobile: {
-      getUri: (uri) => `trust://wc?uri=${encodeURIComponent(uri)}`,
-    },
-    qrCode: {
-      ...wallet.qrCode,
-      getUri: (uri: string) => uri,
-    },
-  };
-};
-
 const transports = {
   [mainnet.id]: fallback([
     http('https://eth.drpc.org'),
@@ -90,7 +76,7 @@ const connectors = connectorsForWallets(
       groupName: 'Popular',
       wallets: [
         metaMaskWallet,
-        trustWalletWithDeepLink,
+        trustWallet,
         rainbowWallet,
         coinbaseWallet,
         walletConnectWallet,

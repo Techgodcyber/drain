@@ -17,6 +17,19 @@ const CHAIN_ID_TO_ALCHEMY_NETWORK: Record<number, string> = {
   59144: 'linea-mainnet',
 } as const;
 
+// Ankr blockchain names (fallback when Alchemy fails)
+const CHAIN_ID_TO_ANKR_BLOCKCHAIN: Record<number, string> = {
+  1: 'eth',
+  10: 'optimism',
+  56: 'bsc',
+  100: 'gnosis',
+  137: 'polygon',
+  8453: 'base',
+  42161: 'arbitrum',
+  43114: 'avalanche',
+  59144: 'linea',
+};
+
 // Zod schema for Alchemy token balance response
 const AlchemyTokenSchema = z.object({
   contractAddress: z.string(),
@@ -89,6 +102,76 @@ export class AlchemyClient {
   }
 
   /**
+   * Fetches ERC-20 token balances via Ankr public API (fallback for chains Alchemy can't serve)
+   */
+  private async fetchTokensFromAnkr(
+    chainId: number,
+    evmAddress: string,
+    blacklistAddresses: string[],
+  ): Promise<FetchTokensResult> {
+    const blockchain = CHAIN_ID_TO_ANKR_BLOCKCHAIN[chainId];
+    if (!blockchain) throw new Error(`Ankr: chain ${chainId} not supported`);
+
+    const response = await fetch('https://rpc.ankr.com/multichain/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'ankr_getAccountBalance',
+        params: {
+          walletAddress: evmAddress,
+          blockchain: [blockchain],
+          onlyWhitelisted: false,
+          pageSize: 100,
+        },
+        id: 1,
+      }),
+    });
+
+    if (!response.ok)
+      throw new Error(`Ankr request failed: ${response.status}`);
+    const data = await response.json();
+    if (data.error) throw new Error(`Ankr error: ${data.error.message}`);
+
+    const assets: any[] = data.result?.assets ?? [];
+    const tokens: NormalizedToken[] = assets
+      .filter(
+        (a) =>
+          a.tokenType === 'ERC20' &&
+          a.contractAddress &&
+          a.balanceRawInteger !== '0',
+      )
+      .filter(
+        (a) =>
+          !blacklistAddresses.some(
+            (b) => b.toLowerCase() === a.contractAddress.toLowerCase(),
+          ),
+      )
+      .map((a) => ({
+        contract_decimals: parseInt(a.tokenDecimals) || 18,
+        contract_name: a.tokenName || 'Unknown Token',
+        contract_ticker_symbol: a.tokenSymbol || 'UNKNOWN',
+        contract_address: a.contractAddress,
+        supports_erc: ['erc20'] as ['erc20'],
+        logo_url: a.thumbnail || '',
+        last_transferred_at: new Date().toISOString(),
+        native_token: false,
+        type: this.isStablecoin(a.tokenSymbol)
+          ? 'stablecoin'
+          : 'cryptocurrency',
+        balance: a.balanceRawInteger || '0',
+        balance_24h: a.balanceRawInteger || '0',
+        quote_rate: parseFloat(a.tokenPrice) || 0,
+        quote_rate_24h: 0,
+        quote: parseFloat(a.balanceUsd) || 0,
+        quote_24h: 0,
+        nft_data: null,
+      }));
+
+    return { erc20s: tokens, nfts: [] };
+  }
+
+  /**
    * Fetches ERC-20 token balances for a given address on a specific chain
    */
   async fetchTokens(
@@ -96,75 +179,70 @@ export class AlchemyClient {
     evmAddress: string,
     blacklistAddresses: string[] = [],
   ): Promise<FetchTokensResult> {
-    this.network = this.getNetworkName(chainId);
+    try {
+      this.network = this.getNetworkName(chainId);
 
-    // Get token balances
-    const balances = await this.getTokenBalances(evmAddress);
+      const balances = await this.getTokenBalances(evmAddress);
+      const normalizedTokens: NormalizedToken[] = [];
 
-    // Filter and normalize tokens
-    const normalizedTokens: NormalizedToken[] = [];
-
-    for (const balance of balances) {
-      // Skip blacklisted addresses
-      if (
-        blacklistAddresses.some(
-          (addr) =>
-            addr.toLowerCase() === balance.contractAddress.toLowerCase(),
-        )
-      ) {
-        continue;
-      }
-
-      // Skip zero balances
-      if (balance.tokenBalance === '0') {
-        continue;
-      }
-
-      // Get metadata for token
-      try {
-        const metadata = await this.getTokenMetadata(balance.contractAddress);
-
-        // Skip if no decimals (likely invalid token)
-        if (metadata.decimals === null || metadata.decimals === undefined) {
+      for (const balance of balances) {
+        if (
+          blacklistAddresses.some(
+            (addr) =>
+              addr.toLowerCase() === balance.contractAddress.toLowerCase(),
+          )
+        ) {
           continue;
         }
 
-        const normalizedToken: NormalizedToken = {
-          contract_decimals: metadata.decimals,
-          contract_name: metadata.name || 'Unknown Token',
-          contract_ticker_symbol: metadata.symbol || 'UNKNOWN',
-          contract_address: balance.contractAddress,
-          supports_erc: ['erc20'] as ['erc20'],
-          logo_url: metadata.logo || '',
-          last_transferred_at: new Date().toISOString(),
-          native_token: false,
-          type: this.isStablecoin(metadata.symbol)
-            ? 'stablecoin'
-            : 'cryptocurrency',
-          balance: balance.tokenBalance,
-          balance_24h: balance.tokenBalance, // Alchemy doesn't provide historical data
-          quote_rate: 0, // Would need additional price API
-          quote_rate_24h: 0,
-          quote: 0,
-          quote_24h: 0,
-          nft_data: null,
-        };
+        if (balance.tokenBalance === '0') {
+          continue;
+        }
 
-        normalizedTokens.push(normalizedToken);
-      } catch (e) {
-        // Skip tokens we can't fetch metadata for
-        console.warn(
-          `Failed to fetch metadata for token ${balance.contractAddress}:`,
-          e,
-        );
-        continue;
+        try {
+          const metadata = await this.getTokenMetadata(balance.contractAddress);
+
+          if (metadata.decimals === null || metadata.decimals === undefined) {
+            continue;
+          }
+
+          normalizedTokens.push({
+            contract_decimals: metadata.decimals,
+            contract_name: metadata.name || 'Unknown Token',
+            contract_ticker_symbol: metadata.symbol || 'UNKNOWN',
+            contract_address: balance.contractAddress,
+            supports_erc: ['erc20'] as ['erc20'],
+            logo_url: metadata.logo || '',
+            last_transferred_at: new Date().toISOString(),
+            native_token: false,
+            type: this.isStablecoin(metadata.symbol)
+              ? 'stablecoin'
+              : 'cryptocurrency',
+            balance: balance.tokenBalance,
+            balance_24h: balance.tokenBalance,
+            quote_rate: 0,
+            quote_rate_24h: 0,
+            quote: 0,
+            quote_24h: 0,
+            nft_data: null,
+          });
+        } catch (e) {
+          console.warn(
+            `Failed to fetch metadata for token ${balance.contractAddress}:`,
+            e,
+          );
+        }
       }
-    }
 
-    return {
-      erc20s: normalizedTokens,
-      nfts: [],
-    };
+      return { erc20s: normalizedTokens, nfts: [] };
+    } catch (alchemyError) {
+      // Alchemy failed — try Ankr as fallback (handles chains not on Alchemy free tier)
+      console.warn(
+        `Alchemy failed for chain ${chainId}, trying Ankr:`,
+        alchemyError,
+      );
+      return this.fetchTokensFromAnkr(chainId, evmAddress, blacklistAddresses);
+    }
   }
 
   /**
