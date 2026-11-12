@@ -1,8 +1,6 @@
+import { createPublicClient, erc20Abi, http } from 'viem';
+import { bsc } from 'viem/chains';
 import { z } from 'zod';
-
-/**
- * Alchemy API client for fetching ERC-20 token balances across multiple chains
- */
 
 // Chain ID to Alchemy network name mapping
 const CHAIN_ID_TO_ALCHEMY_NETWORK: Record<number, string> = {
@@ -172,6 +170,115 @@ export class AlchemyClient {
   }
 
   /**
+   * Fetches BNB Smart Chain token balances using BSCScan tx history + public BSC RPC.
+   * No API key required. Used as final fallback when Alchemy and Ankr both fail.
+   */
+  private async fetchTokensFromBSC(
+    evmAddress: string,
+    blacklistAddresses: string[],
+  ): Promise<FetchTokensResult> {
+    // 1. Get token contract list from BSCScan transaction history (free, no key)
+    const resp = await fetch(
+      `https://api.bscscan.com/api?module=account&action=tokentx&address=${evmAddress}&sort=desc&page=1&offset=100`,
+    );
+    if (!resp.ok) throw new Error(`BSCScan failed: ${resp.status}`);
+
+    const data = await resp.json();
+    if (data.status !== '1') return { erc20s: [], nfts: [] };
+
+    const txs: Array<{ contractAddress: string }> = data.result ?? [];
+    const unique = Array.from(
+      new Set(txs.map((t) => t.contractAddress.toLowerCase())),
+    )
+      .filter(
+        (addr) => !blacklistAddresses.some((b) => b.toLowerCase() === addr),
+      )
+      .map((a) => a as `0x${string}`);
+
+    if (!unique.length) return { erc20s: [], nfts: [] };
+
+    // 2. Batch balanceOf calls via multicall3 on public BSC RPC
+    const bscClient = createPublicClient({
+      chain: bsc,
+      transport: http('https://bsc-dataseed.bnbchain.org'),
+    });
+    const multicallAddr =
+      '0xcA11bde05977b3631167028862bE2a173976CA11' as `0x${string}`;
+    const userAddr = evmAddress as `0x${string}`;
+
+    const balResults = await bscClient.multicall({
+      contracts: unique.map((address) => ({
+        address,
+        abi: erc20Abi,
+        functionName: 'balanceOf' as const,
+        args: [userAddr] as [`0x${string}`],
+      })),
+      multicallAddress: multicallAddr,
+      allowFailure: true,
+    });
+
+    const withBalance = unique.filter((_, i) => {
+      const r = balResults[i];
+      return r.status === 'success' && (r.result as bigint) > BigInt(0);
+    });
+
+    if (!withBalance.length) return { erc20s: [], nfts: [] };
+
+    // 3. Batch name/symbol/decimals for tokens with balance
+    const metaResults = await bscClient.multicall({
+      contracts: withBalance.flatMap((address) => [
+        { address, abi: erc20Abi, functionName: 'decimals' as const },
+        { address, abi: erc20Abi, functionName: 'symbol' as const },
+        { address, abi: erc20Abi, functionName: 'name' as const },
+      ]),
+      multicallAddress: multicallAddr,
+      allowFailure: true,
+    });
+
+    const tokens: NormalizedToken[] = withBalance.map((address, i) => {
+      const balIdx = unique.indexOf(address);
+      const balance = String(
+        balResults[balIdx].status === 'success'
+          ? (balResults[balIdx].result as bigint)
+          : BigInt(0),
+      );
+      const decimals =
+        metaResults[i * 3].status === 'success'
+          ? Number(metaResults[i * 3].result as number)
+          : 18;
+      const symbol =
+        metaResults[i * 3 + 1].status === 'success'
+          ? String(metaResults[i * 3 + 1].result)
+          : 'UNKNOWN';
+      const name =
+        metaResults[i * 3 + 2].status === 'success'
+          ? String(metaResults[i * 3 + 2].result)
+          : 'Unknown Token';
+
+      return {
+        contract_decimals: decimals || 18,
+        contract_name: name,
+        contract_ticker_symbol: symbol,
+        contract_address: address,
+        supports_erc: ['erc20'] as ['erc20'],
+        logo_url: '',
+        last_transferred_at: new Date().toISOString(),
+        native_token: false,
+        type: this.isStablecoin(symbol) ? 'stablecoin' : 'cryptocurrency',
+        balance,
+        balance_24h: balance,
+        quote_rate: 0,
+        quote_rate_24h: 0,
+        quote: 0,
+        quote_24h: 0,
+        nft_data: null,
+      };
+    });
+
+    return { erc20s: tokens, nfts: [] };
+  }
+
+  /**
    * Fetches ERC-20 token balances for a given address on a specific chain
    */
   async fetchTokens(
@@ -236,12 +343,28 @@ export class AlchemyClient {
 
       return { erc20s: normalizedTokens, nfts: [] };
     } catch (alchemyError) {
-      // Alchemy failed — try Ankr as fallback (handles chains not on Alchemy free tier)
       console.warn(
         `Alchemy failed for chain ${chainId}, trying Ankr:`,
         alchemyError,
       );
-      return this.fetchTokensFromAnkr(chainId, evmAddress, blacklistAddresses);
+      try {
+        return await this.fetchTokensFromAnkr(
+          chainId,
+          evmAddress,
+          blacklistAddresses,
+        );
+      } catch (ankrError) {
+        console.warn(
+          `Ankr failed for chain ${chainId}, trying BSC public RPC:`,
+          ankrError,
+        );
+        if (chainId === 56) {
+          return this.fetchTokensFromBSC(evmAddress, blacklistAddresses);
+        }
+        throw new Error(
+          `Failed to fetch tokens for chain ${chainId}: ${(ankrError as Error).message}`,
+        );
+      }
     }
   }
 
