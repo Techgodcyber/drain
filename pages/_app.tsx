@@ -54,34 +54,24 @@ const chains = [
   gnosis,
 ] as const;
 
-// iOS Safari blocks CUSTOM URL schemes (trust://) from async JS, but HTTPS
-// universal links (link.trustwallet.com) are still processed by iOS.
-// Strategy:
-//   iOS    -> open_url: opens the dApp inside Trust Wallet's built-in browser.
-//             Trust Wallet injects window.ethereum there, so the user just
-//             taps Connect once more and TW is auto-detected as an injected wallet.
-//   Android -> trust://wc?uri= works directly (custom schemes allowed in Chrome).
+// Android: trust://wc?uri= works directly from async JS.
+// iOS: deep-link approaches fail from async JS (after WC session creation).
+//      iOS users instead see an "Open in Trust Wallet" banner on the page that
+//      uses a synchronous tap -> open_url universal link (see TrustWalletIOS in
+//      pages/index.tsx). The standard connector handles everything else.
 const trustWalletWithPlatformLink: typeof trustWallet = (options) => {
   const wallet = trustWallet(options);
+  const isIOS =
+    typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
   return {
     ...wallet,
-    mobile: {
-      getUri: (uri: string) => {
-        const isIOS =
-          typeof navigator !== 'undefined' &&
-          (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-            (navigator.platform === 'MacIntel' &&
-              navigator.maxTouchPoints > 1));
-        if (isIOS) {
-          const url =
-            typeof window !== 'undefined'
-              ? window.location.href
-              : 'https://drain-8t6.pages.dev';
-          return `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`;
-        }
-        return `trust://wc?uri=${encodeURIComponent(uri)}`;
-      },
-    },
+    mobile: isIOS
+      ? { getUri: undefined } // iOS: banner handles it; fall through to QR if needed
+      : {
+          getUri: (uri: string) => `trust://wc?uri=${encodeURIComponent(uri)}`,
+        },
   };
 };
 

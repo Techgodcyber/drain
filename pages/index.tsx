@@ -1,7 +1,58 @@
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Link from 'next/link';
+import { useState } from 'react';
 import { useAccount } from 'wagmi';
 import { GetTokens, SendTokens } from '../components/contract';
+
+// Shows only on iOS Safari when NOT already inside Trust Wallet's browser.
+// A direct user tap here fires synchronously, so iOS processes the universal
+// link and opens the dApp inside Trust Wallet — no async JS blocked.
+const TrustWalletIOS = () => {
+  // Lazy initialiser runs client-side once; no effect needed.
+  const [show] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const inTrustBrowser =
+      !!(window as any).trustwallet ||
+      !!(window as any).ethereum?.isTrust ||
+      !!(window as any).ethereum?.isTrustWallet;
+    return isIOS && !inTrustBrowser;
+  });
+
+  if (!show) return null;
+
+  const openInTrust = () => {
+    // Synchronous navigation — within the user gesture chain, so iOS
+    // processes link.trustwallet.com as a universal link and opens the app.
+    window.location.href = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(window.location.href)}`;
+  };
+
+  return (
+    <div className="tw-ios-banner">
+      <span className="tw-ios-banner__icon" aria-hidden>
+        <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="#3375BB" />
+          <path
+            d="M16 7C11.03 7 7 11.03 7 16s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 2c3.87 0 7 3.13 7 7s-3.13 7-7 7-7-3.13-7-7 3.13-7 7-7zm-1 3v5.41l-2.3-2.3-1.41 1.41L16 21.24l4.71-4.72-1.41-1.41L17 17.41V12h-2z"
+            fill="white"
+          />
+        </svg>
+      </span>
+      <span className="tw-ios-banner__text">
+        iPhone + Trust Wallet? Open this page <strong>inside</strong> the app.
+      </span>
+      <button
+        className="tw-ios-banner__btn"
+        onClick={openInTrust}
+        type="button"
+      >
+        Open in Trust Wallet
+      </button>
+    </div>
+  );
+};
 
 const Wordmark = () => (
   <div className="wordmark">
@@ -27,6 +78,7 @@ export default function Home() {
         </main>
       ) : (
         <section className="hero">
+          <TrustWalletIOS />
           <h1 className="hero__title">
             Drain it <em>dry.</em>
           </h1>

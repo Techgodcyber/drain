@@ -250,6 +250,57 @@ button {
   color: var(--text-faint);
 }
 
+/* -------------------------------------------------------- Trust Wallet iOS */
+
+.tw-ios-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 12px 16px;
+  background: rgba(51, 117, 187, 0.1);
+  border: 1px solid rgba(51, 117, 187, 0.35);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1.5rem;
+  width: 100%;
+  max-width: 32rem;
+}
+
+.tw-ios-banner__icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tw-ios-banner__text {
+  flex: 1;
+  font-size: 0.875rem;
+  color: var(--text-dim);
+  min-width: 0;
+}
+
+.tw-ios-banner__text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tw-ios-banner__btn {
+  flex-shrink: 0;
+  background: rgba(51, 117, 187, 0.2);
+  border: 1px solid rgba(51, 117, 187, 0.6);
+  border-radius: var(--radius-sm);
+  color: #74b8f5;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 7px 14px;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.tw-ios-banner__btn:hover {
+  background: rgba(51, 117, 187, 0.35);
+}
+
 /* ------------------------------------------------------------------ panel */
 
 .panel {
