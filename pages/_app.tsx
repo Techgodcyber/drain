@@ -54,15 +54,16 @@ const chains = [
   gnosis,
 ] as const;
 
-const trustWalletWithUniversalLink: typeof trustWallet = (options) => {
+const trustWalletWithDeepLink: typeof trustWallet = (options) => {
   const wallet = trustWallet(options);
-
   return {
     ...wallet,
     mobile: {
-      ...wallet.mobile,
-      getUri: (uri) =>
-        `https://link.trustwallet.com/wc?uri=${encodeURIComponent(uri)}`,
+      getUri: (uri) => `trust://wc?uri=${encodeURIComponent(uri)}`,
+    },
+    qrCode: {
+      ...wallet.qrCode,
+      getUri: (uri: string) => uri,
     },
   };
 };
@@ -89,7 +90,7 @@ const connectors = connectorsForWallets(
       groupName: 'Popular',
       wallets: [
         metaMaskWallet,
-        trustWalletWithUniversalLink,
+        trustWalletWithDeepLink,
         rainbowWallet,
         coinbaseWallet,
         walletConnectWallet,
