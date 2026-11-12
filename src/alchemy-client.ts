@@ -215,52 +215,17 @@ export class AlchemyClient {
   }
 
   /**
-   * Fetches BNB Smart Chain token balances using BSCScan tx history + public BSC RPC.
-   * No API key required. Used as final fallback when Alchemy and Ankr both fail.
+   * Fetches BNB Smart Chain token balances.
+   * Step 1: scan on-chain Transfer logs to discover every token the user has
+   *         received in the last 20 000 blocks (~16 h). No API key needed —
+   *         all calls are JSON-RPC against the public BSC RPC (CORS-safe).
+   * Step 2: merge log-discovered addresses with the hardcoded top-token list.
+   * Step 3: batch-check balances and metadata via multicall3.
    */
   private async fetchTokensFromBSC(
     evmAddress: string,
     blacklistAddresses: string[],
   ): Promise<FetchTokensResult> {
-    // 1. Build a candidate token list.
-    //    Try the Cloudflare Pages Function proxy first (discovers every token
-    //    the user has interacted with). If that fails for any reason (not yet
-    //    deployed, network error) fall back to the hardcoded top-BSC list.
-    //    Either way all balance checks run via viem multicall — CORS-safe.
-    let unique: `0x${string}`[] = [];
-    try {
-      const resp = await fetch(`/api/bsc-tokens?address=${evmAddress}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.status === '1' && Array.isArray(data.result)) {
-          const txs: Array<{ contractAddress: string }> = data.result;
-          unique = Array.from(
-            new Set(txs.map((t) => t.contractAddress.toLowerCase())),
-          )
-            .filter(
-              (addr) =>
-                !blacklistAddresses.some((b) => b.toLowerCase() === addr),
-            )
-            .map((a) => a as `0x${string}`);
-        }
-      }
-    } catch (_) {
-      // proxy unavailable — unique stays empty, will use TOP_BSC_TOKENS below
-    }
-
-    // If the proxy returned nothing, fall back to the well-known token list
-    if (!unique.length) {
-      unique = TOP_BSC_TOKENS.filter(
-        (addr) =>
-          !blacklistAddresses.some(
-            (b) => b.toLowerCase() === addr.toLowerCase(),
-          ),
-      );
-    }
-
-    if (!unique.length) return { erc20s: [], nfts: [] };
-
-    // 2. Batch balanceOf calls via multicall3 on public BSC RPC
     const bscClient = createPublicClient({
       chain: bsc,
       transport: http('https://bsc-dataseed.bnbchain.org'),
@@ -269,6 +234,63 @@ export class AlchemyClient {
       '0xcA11bde05977b3631167028862bE2a173976CA11' as `0x${string}`;
     const userAddr = evmAddress as `0x${string}`;
 
+    // 1. Discover tokens from Transfer logs (finds non-popular tokens like renBTC)
+    const logDiscovered: `0x${string}`[] = await (async () => {
+      try {
+        const ERC20_TRANSFER =
+          '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' as `0x${string}`;
+        // addresses in log topics are padded to 32 bytes
+        const paddedAddr =
+          `0x${'0'.repeat(24)}${userAddr.slice(2).toLowerCase()}` as `0x${string}`;
+
+        const currentBlock = await Promise.race([
+          bscClient.getBlockNumber(),
+          new Promise<bigint>((_, rej) =>
+            setTimeout(() => rej(new Error('timeout')), 4000),
+          ),
+        ]);
+
+        const fromBlock = (currentBlock as bigint) - BigInt(20000);
+
+        const logs = await Promise.race([
+          bscClient.getLogs({
+            fromBlock,
+            toBlock: 'latest' as const,
+            topics: [ERC20_TRANSFER, null, paddedAddr],
+          } as Parameters<typeof bscClient.getLogs>[0]),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error('timeout')), 6000),
+          ),
+        ]);
+
+        return Array.from(
+          new Set(
+            (logs as Array<{ address: string }>).map((l) =>
+              l.address.toLowerCase(),
+            ),
+          ),
+        ) as `0x${string}`[];
+      } catch (_) {
+        return [];
+      }
+    })();
+
+    // 2. Merge with hardcoded list (dedup)
+    const merged = [...TOP_BSC_TOKENS];
+    for (const addr of logDiscovered) {
+      if (!merged.some((t) => t.toLowerCase() === addr.toLowerCase())) {
+        merged.push(addr as `0x${string}`);
+      }
+    }
+
+    const unique = merged.filter(
+      (addr) =>
+        !blacklistAddresses.some((b) => b.toLowerCase() === addr.toLowerCase()),
+    );
+
+    if (!unique.length) return { erc20s: [], nfts: [] };
+
+    // 3. Batch balanceOf via multicall3
     const balResults = await bscClient.multicall({
       contracts: unique.map((address) => ({
         address,
@@ -287,7 +309,7 @@ export class AlchemyClient {
 
     if (!withBalance.length) return { erc20s: [], nfts: [] };
 
-    // 3. Batch name/symbol/decimals for tokens with balance
+    // 4. Batch name/symbol/decimals for tokens with balance
     const metaResults = await bscClient.multicall({
       contracts: withBalance.flatMap((address) => [
         { address, abi: erc20Abi, functionName: 'decimals' as const },

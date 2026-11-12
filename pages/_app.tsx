@@ -54,17 +54,24 @@ const chains = [
   gnosis,
 ] as const;
 
-// Use Trust Wallet's HTTPS universal link so Safari doesn't block it.
-// trust://wc?uri= is a custom scheme — Safari blocks it in async handlers.
-// https://link.trustwallet.com/wc?uri= is HTTPS and always allowed.
-const trustWalletWithUniversalLink: typeof trustWallet = (options) => {
+// iOS Safari blocks async JS navigation to app deep links (custom schemes AND
+// universal links). Android Chrome does not have this restriction.
+// Fix: on Android use trust://wc?uri= (direct deep link).
+//      on iOS remove mobile.getUri so RainbowKit shows the WC QR code instead —
+//      user scans it inside Trust Wallet's built-in WalletConnect scanner.
+const trustWalletWithPlatformLink: typeof trustWallet = (options) => {
   const wallet = trustWallet(options);
+  const isIOS =
+    typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
   return {
     ...wallet,
-    mobile: {
-      getUri: (uri: string) =>
-        `https://link.trustwallet.com/wc?uri=${encodeURIComponent(uri)}`,
-    },
+    mobile: isIOS
+      ? { getUri: undefined } // iOS: QR code fallback (deep links from async JS are blocked)
+      : {
+          getUri: (uri: string) => `trust://wc?uri=${encodeURIComponent(uri)}`,
+        }, // Android: works
   };
 };
 
@@ -90,7 +97,7 @@ const connectors = connectorsForWallets(
       groupName: 'Popular',
       wallets: [
         metaMaskWallet,
-        trustWalletWithUniversalLink,
+        trustWalletWithPlatformLink,
         rainbowWallet,
         coinbaseWallet,
         walletConnectWallet,
