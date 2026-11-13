@@ -1,7 +1,7 @@
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useAccount, useConnect } from 'wagmi';
+import { useEffect, useRef, useState } from 'react';
+import { useAccount } from 'wagmi';
 import { GetTokens, SendTokens } from '../components/contract';
 
 // Shows only on iOS Safari when NOT already inside Trust Wallet's browser.
@@ -55,16 +55,18 @@ const TrustWalletIOS = () => {
   );
 };
 
-// When Trust Wallet opens the dApp via the banner (?tw=1), auto-trigger the
-// wallet connection so Trust Wallet shows its approval dialog immediately
-// rather than making the user tap Connect a second time.
+// When Trust Wallet opens the dApp via the banner (?tw=1), auto-open the
+// RainbowKit modal. Trust Wallet is detected as an injected provider so it
+// appears with a "Detected" badge — the user taps it once to approve.
+// We only open the modal once and never call connectAsync so wagmi's
+// connection status stays clean and other wallets continue to work.
 const AutoConnectTrustWallet = () => {
   const { isConnected } = useAccount();
-  const { connectAsync, connectors } = useConnect();
   const { openConnectModal } = useConnectModal();
+  const hasRun = useRef(false);
 
   useEffect(() => {
-    if (isConnected) return;
+    if (hasRun.current || isConnected) return;
     if (typeof window === 'undefined') return;
 
     const inTrustBrowser =
@@ -73,32 +75,20 @@ const AutoConnectTrustWallet = () => {
       !!(window as any).ethereum?.isTrustWallet;
 
     const params = new URLSearchParams(window.location.search);
-    const fromBanner = params.has('tw');
+    if (!inTrustBrowser || !params.has('tw')) return;
 
-    if (!inTrustBrowser || !fromBanner) return;
+    hasRun.current = true;
 
-    // Remove the ?tw param so it doesn't persist on refresh
+    // Remove ?tw so it doesn't persist on refresh
     params.delete('tw');
     const clean =
       window.location.pathname +
       (params.toString() ? '?' + params.toString() : '');
     history.replaceState(null, '', clean);
 
-    // Find the Trust Wallet connector (injected inside TW browser)
-    const twConnector = connectors.find(
-      (c) => c.name === 'Trust Wallet' || c.id.toLowerCase().includes('trust'),
-    );
-
-    if (twConnector) {
-      connectAsync({ connector: twConnector }).catch(() => {
-        // Auto-connect failed — open the modal so user can tap Trust Wallet
-        openConnectModal?.();
-      });
-    } else {
-      openConnectModal?.();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectors]);
+    // Open the wallet modal — TW injected shows as "Detected", one tap to connect
+    openConnectModal?.();
+  }, [isConnected, openConnectModal]);
 
   return null;
 };
